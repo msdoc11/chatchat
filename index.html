@@ -214,7 +214,7 @@
         let savedName = getCookie("savedName");
         nameInput.value = savedName;
 
-        const socket = new WebSocket("ws://localhost:3000");
+        const socket = new WebSocket("ws://chatchat-three.vercel.app");
 
         socket.addEventListener("open", () => {
           // Проверяем, что имя есть и оно не пустое
