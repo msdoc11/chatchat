@@ -1,0 +1,389 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="UTF-8" />
+    <title>WebSocket Chat</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+    <style>
+      * {
+        padding: 0px;
+        margin: 0px;
+        border: none;
+      }
+
+      *,
+      *::before,
+      *::after {
+        box-sizing: border-box;
+      }
+      #messanger,
+      #chat-container,
+      body {
+        display: grid;
+        grid-template-rows: auto 1fr auto;
+        height: 100vh;
+      }
+      #chat-container {
+        padding-bottom: 1rem;
+      }
+      #messanger {
+        width: 100%;
+        max-width: 600px;
+        margin: 0 auto;
+      }
+      #header {
+        position: relative;
+        display: flex;
+        align-items: center;
+        text-align: center;
+        height: 40px;
+        border-bottom: 1px solid #d9d9d9;
+      }
+      #nameContainer {
+        position: absolute;
+        top: 0;
+        left: 0;
+        bottom: 0;
+      }
+      #nameInput {
+        font-size: 0.8rem;
+        border: 0;
+        font-size: 1.3rem;
+        font-weight: 600;
+        padding-left: 1rem;
+        margin: auto 0;
+      }
+      #chat {
+        padding: 1rem 0.5rem;
+      }
+      #chat {
+        display: flex;
+        flex-direction: column;
+        gap: 0.5rem;
+        margin-top: auto;
+      }
+      .own-message,
+      .other-message {
+        position: relative;
+        display: inline-block;
+        width: max-content;
+        padding: 1rem 0.5rem 0.5rem 0.5rem;
+        background-color: #007aff;
+        border-radius: 15px;
+        color: white;
+      }
+      .other-message {
+        color: black;
+        background-color: #eee;
+      }
+      .other-message .name {
+        color: green;
+      }
+      .own-message {
+        padding: 0.5rem;
+        margin-left: auto;
+      }
+      .name {
+        position: absolute;
+        top: 3px;
+        left: 8px;
+        font-size: 0.8rem;
+      }
+      .time {
+        position: relative;
+        top: 5px;
+        font-size: 0.7rem;
+      }
+      #typingIndicator {
+        position: relative;
+        width: 100%;
+        text-align: center;
+        font-size: 0.8rem;
+      }
+      #bottom {
+        display: flex;
+        gap: 1rem;
+        padding: 0 0.5rem;
+      }
+      #bottom > input {
+        width: 100%;
+        border: 1px solid lightgrey;
+        padding: 0.7rem 1rem;
+        border-radius: 9999px;
+      }
+      #bottom > button {
+        width: 50px;
+        background: transparent;
+        border: 0;
+        cursor: pointer;
+      }
+      #bottom > button:hover {
+        opacity: 0.7;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="onlineUsers"></div>
+    <div id="messanger">
+      <div id="chat-container">
+        <div id="header">
+          <div id="nameContainer">
+            <input id="nameInput" type="text" placeholder="Введите имя" />
+            <button id="nameSubmit">Ок</button>
+          </div>
+          <div id="typingIndicator" class="typing-indicator"></div>
+        </div>
+        <div id="chat"></div>
+        <div id="bottom">
+          <input
+            id="messageInput"
+            type="text"
+            placeholder="Введите сообщение"
+          />
+          <button id="sendButton">
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke-width="1.5"
+              stroke="currentColor"
+              class="w-6 h-6"
+            >
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                d="M6 12L3.269 3.126A59.768 59.768 0 0121.485 12 59.77 59.77 0 013.27 20.876L5.999 12zm0 0h7.5"
+              />
+            </svg>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      // Функция для установки куки
+      function setCookie(name, value, days) {
+        const date = new Date();
+        date.setTime(date.getTime() + days * 24 * 60 * 60 * 1000);
+        const expires = "expires=" + date.toUTCString();
+        document.cookie = name + "=" + value + ";" + expires + ";path=/";
+      }
+
+      // Функция для получения значения куки
+      function getCookie(name) {
+        const cookieName = name + "=";
+        const cookies = document.cookie.split(";");
+
+        for (let i = 0; i < cookies.length; i++) {
+          let cookie = cookies[i];
+          while (cookie.charAt(0) === " ") {
+            cookie = cookie.substring(1);
+          }
+          if (cookie.indexOf(cookieName) === 0) {
+            return cookie.substring(cookieName.length, cookie.length);
+          }
+        }
+
+        return "";
+      }
+      let savedName = getCookie("savedName");
+      if (savedName !== "") {
+        socketOpen();
+      } else {
+        const nameSubmitButton = document.getElementById("nameSubmit");
+        const nameInput = document.getElementById("nameInput");
+        nameSubmitButton.addEventListener("click", () => {
+          if (nameInput !== "") {
+            setCookie("savedName", nameInput.value, 365);
+            socketOpen();
+          }
+        });
+      }
+      function socketOpen() {
+        const chatDiv = document.getElementById("chat");
+        const nameInput = document.getElementById("nameInput");
+        const messageInput = document.getElementById("messageInput");
+        const sendButton = document.getElementById("sendButton");
+        const typingIndicator = document.getElementById("typingIndicator");
+        const TYPING_DELAY = 1000;
+        let typingTimeout = null;
+        const typingUsers = {}; // Объект для хранения информации о печатающих пользователях
+        // Получаем значение clientId из куки
+        let clientId = getCookie("clientId");
+        let savedName = getCookie("savedName");
+        nameInput.value = savedName;
+
+        const socket = new WebSocket("ws://localhost:3000");
+
+        socket.addEventListener("open", () => {
+          // Проверяем, что имя есть и оно не пустое
+
+          // Инициируем соединение с сервером
+          clientId = Math.random().toString(36).substr(2, 9); // Генерируем новый id
+          setCookie("clientId", clientId, 365);
+
+          socket.send(
+            JSON.stringify({
+              type: "id",
+              userId: clientId,
+              name: savedName, // Отправляем сохраненное имя
+            })
+          );
+        });
+
+        messageInput.addEventListener("keydown", (event) => {
+          if (event.key === "Enter" && clientId !== "") {
+            event.preventDefault();
+            const message = messageInput.value;
+            const name = nameInput.value;
+
+            if (name && name.trim() !== "" && message.trim() !== "") {
+              socket.send(
+                JSON.stringify({
+                  type: "message",
+                  content: message,
+                  name: name,
+                })
+              );
+              messageInput.value = "";
+            }
+          }
+        });
+
+        messageInput.addEventListener("input", () => {
+          clearTimeout(typingTimeout);
+
+          socket.send(
+            JSON.stringify({
+              type: "typing",
+              isTyping: true,
+              clientId: clientId,
+              name: nameInput.value,
+            })
+          );
+
+          typingTimeout = setTimeout(() => {
+            socket.send(
+              JSON.stringify({
+                type: "typing",
+                isTyping: false,
+                clientId: clientId,
+              })
+            );
+          }, TYPING_DELAY);
+        });
+
+        socket.onmessage = (event) => {
+          const parsedMessage = JSON.parse(event.data);
+
+          if (parsedMessage.type === "history") {
+            // Обработка истории сообщений
+            parsedMessage.content.forEach((message) => {
+              displayMessage(
+                message.content,
+                message.clientId,
+                message.time,
+                message.name
+              );
+              // if (!clientId) {
+              //   clientId = Math.random().toString(36).substr(2, 9);
+              //   setCookie("clientId", clientId, 365);
+              // }
+            });
+            updateOnlineUsers(parsedMessage.onlineUsers);
+          } else if (parsedMessage.type === "message") {
+            // Обработка обычных сообщений
+            displayMessage(
+              parsedMessage.content,
+              parsedMessage.clientId,
+              parsedMessage.time,
+              parsedMessage.name
+            );
+          } else if (parsedMessage.type === "typing") {
+            if (parsedMessage.isTyping) {
+              // Добавляем пользователя в объект typingUsers
+              typingUsers[parsedMessage.clientId] = parsedMessage.name;
+            } else {
+              // Удаляем пользователя из объекта typingUsers
+              delete typingUsers[parsedMessage.clientId];
+            }
+
+            // Получаем список имен печатающих пользователей
+            const typingNames = Object.values(typingUsers);
+
+            // Обновляем индикатор печати на основе информации из объекта typingUsers
+            if (typingNames.length > 0) {
+              if (typingNames.length === 1) {
+                typingIndicator.textContent = `${typingNames[0]} печатает...`;
+              } else {
+                typingIndicator.textContent = `${typingNames.join(
+                  ", "
+                )} печатают...`;
+              }
+            } else {
+              typingIndicator.textContent = "";
+            }
+          } else if (parsedMessage.type === "onlineUsers") {
+            // Обновляем список онлайн пользователей в реальном времени
+            updateOnlineUsers(parsedMessage.onlineUsers);
+          }
+        };
+        function updateOnlineUsers(onlineUsers) {
+          const onlineUsersElement = document.getElementById("onlineUsers");
+          const filteredOnlineUsers = onlineUsers.filter(
+            (user) => user !== nameInput.value
+          ); // Фильтруем, исключая текущего пользователя
+          onlineUsersElement.innerHTML = `Онлайн: ${filteredOnlineUsers.join(
+            ", "
+          )}`;
+        }
+        sendButton.addEventListener("click", () => {
+          const message = messageInput.value;
+          const name = nameInput.value;
+
+          if (name && name.trim() !== "" && message.trim() !== "") {
+            socket.send(
+              JSON.stringify({ type: "message", content: message, name: name })
+            );
+            messageInput.value = "";
+            savedName = name;
+            setCookie("savedName", savedName, 365);
+          } else {
+            alert("Введите имя");
+          }
+        });
+
+        function displayMessage(content, messageClientId, time, name) {
+          const messageElement = document.createElement("div");
+          const isOwnMessage = messageClientId === clientId;
+
+          const nameElement = document.createElement("span");
+          const contentElement = document.createElement("span");
+          const timeElement = document.createElement("span");
+          contentElement.classList.add("content");
+          timeElement.classList.add("time");
+          nameElement.classList.add("name");
+
+          nameElement.textContent = ` ${name}`;
+          contentElement.textContent = content;
+          timeElement.textContent = ` ${time}`;
+
+          if (!isOwnMessage) {
+            messageElement.appendChild(nameElement);
+          }
+          messageElement.appendChild(contentElement);
+          messageElement.appendChild(timeElement);
+
+          if (isOwnMessage) {
+            messageElement.classList.add("own-message");
+          } else {
+            messageElement.classList.add("other-message");
+          }
+
+          chatDiv.appendChild(messageElement);
+        }
+      }
+    </script>
+  </body>
+</html>
