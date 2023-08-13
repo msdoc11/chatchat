@@ -1,59 +1,11 @@
 <!DOCTYPE html>
-<html>
+<html class="scroll-smooth">
   <head>
     <meta charset="UTF-8" />
     <title>WebSocket Chat</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-
+    <script src="https://cdn.tailwindcss.com"></script>
     <style>
-      * {
-        padding: 0px;
-        margin: 0px;
-        border: none;
-      }
-
-      *,
-      *::before,
-      *::after {
-        box-sizing: border-box;
-      }
-      #messanger,
-      #chat-container,
-      body {
-        display: grid;
-        grid-template-rows: auto 1fr auto;
-        height: 100vh;
-      }
-      #chat-container {
-        padding-bottom: 1rem;
-      }
-      #messanger {
-        width: 100%;
-        max-width: 600px;
-        margin: 0 auto;
-      }
-      #header {
-        position: relative;
-        display: flex;
-        align-items: center;
-        text-align: center;
-        height: 40px;
-        border-bottom: 1px solid #d9d9d9;
-      }
-      #nameContainer {
-        position: absolute;
-        top: 0;
-        left: 0;
-        bottom: 0;
-      }
-      #nameInput {
-        font-size: 0.8rem;
-        border: 0;
-        font-size: 1.3rem;
-        font-weight: 600;
-        padding-left: 1rem;
-        margin: auto 0;
-      }
       #chat {
         padding: 1rem 0.5rem;
       }
@@ -95,53 +47,70 @@
         top: 5px;
         font-size: 0.7rem;
       }
-      #typingIndicator {
-        position: relative;
-        width: 100%;
-        text-align: center;
-        font-size: 0.8rem;
+
+      [placeholder]:empty::before {
+        content: attr(placeholder);
+        color: #555;
       }
-      #bottom {
-        display: flex;
-        gap: 1rem;
-        padding: 0 0.5rem;
+      [placeholder]:empty:focus::before {
+        content: "";
       }
-      #bottom > input {
-        width: 100%;
-        border: 1px solid lightgrey;
-        padding: 0.7rem 1rem;
-        border-radius: 9999px;
-      }
-      #bottom > button {
-        width: 50px;
-        background: transparent;
-        border: 0;
-        cursor: pointer;
-      }
-      #bottom > button:hover {
-        opacity: 0.7;
+      div#chat > div:nth-child(1) {
+        margin-top: auto;
       }
     </style>
   </head>
-  <body>
-    <div id="onlineUsers"></div>
-    <div id="messanger">
-      <div id="chat-container">
-        <div id="header">
-          <div id="nameContainer">
-            <input id="nameInput" type="text" placeholder="Введите имя" />
-            <button id="nameSubmit">Ок</button>
+  <body class="h-screen">
+    <div id="messanger" class="w-full max-w-screen-sm mx-auto h-screen">
+      <div
+        id="chat-container"
+        class="grid grid-rows-[auto_1fr_auto] h-screen pb-4"
+      >
+        <div
+          id="header"
+          class="relative flex flex-col justify-center border-b bg-white/90 backdrop-blur-lg z-50"
+        >
+          <div class="text-sm px-4">
+            <div id="onlineUsers"></div>
           </div>
-          <div id="typingIndicator" class="typing-indicator"></div>
+          <div id="nameContainer" class="flex">
+            <div
+              id="nameInput"
+              class="px-4 pb-2 text-xl font-bold min-w-[8rem]"
+              contenteditable="true"
+              placeholder="Введите имя..."
+            ></div>
+            <button id="nameSubmit" class="hover:opacity-70">
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke-width="1.5"
+                stroke="currentColor"
+                class="w-6 h-6"
+              >
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  d="M4.5 12.75l6 6 9-13.5"
+                />
+              </svg>
+            </button>
+          </div>
+          <div
+            id="typingIndicator"
+            class="typing-indicator absolute top-[105%] left-0 right-0 w-max mx-auto text-center text-sm bg-white/50 px-2 py-0.5 backdrop-blur-lg"
+          ></div>
         </div>
-        <div id="chat"></div>
-        <div id="bottom">
+        <div id="chat" class="h-full overflow-y-auto"></div>
+        <div id="bottom" class="flex gap-4 p-2">
           <input
             id="messageInput"
+            class="w-full border py-1 sm:py-2.5 px-4 rounded-full"
             type="text"
             placeholder="Введите сообщение"
           />
-          <button id="sendButton">
+          <button id="sendButton" class="hover:opacity-70">
             <svg
               xmlns="http://www.w3.org/2000/svg"
               fill="none"
@@ -158,6 +127,11 @@
             </svg>
           </button>
         </div>
+        <div
+          id="newMessages"
+          class="absolute left-4 bottom-20 flex items-center justify-center w-8 h-8 bg-blue-500 text-white rounded-full"
+          style="display: none"
+        ></div>
       </div>
     </div>
 
@@ -191,15 +165,17 @@
       if (savedName !== "") {
         socketOpen();
       } else {
+        alert("Введите имя");
         const nameSubmitButton = document.getElementById("nameSubmit");
         const nameInput = document.getElementById("nameInput");
         nameSubmitButton.addEventListener("click", () => {
-          if (nameInput !== "") {
-            setCookie("savedName", nameInput.value, 365);
+          if (nameInput.textContent !== "") {
+            setCookie("savedName", nameInput.textContent, 365);
             socketOpen();
           }
         });
       }
+
       function socketOpen() {
         const chatDiv = document.getElementById("chat");
         const nameInput = document.getElementById("nameInput");
@@ -212,16 +188,20 @@
         // Получаем значение clientId из куки
         let clientId = getCookie("clientId");
         let savedName = getCookie("savedName");
-        nameInput.value = savedName;
+        nameInput.textContent = savedName;
 
-        const socket = new WebSocket("ws://chatchat-three.vercel.app");
+        const socket = new WebSocket("ws://localhost:3000");
 
         socket.addEventListener("open", () => {
           // Проверяем, что имя есть и оно не пустое
 
           // Инициируем соединение с сервером
-          clientId = Math.random().toString(36).substr(2, 9); // Генерируем новый id
-          setCookie("clientId", clientId, 365);
+          if (clientId == "") {
+            clientId = Math.random().toString(36).substr(2, 9); // Генерируем новый id
+            setCookie("clientId", clientId, 365);
+          } else {
+            clientId = getCookie("clientId");
+          }
 
           socket.send(
             JSON.stringify({
@@ -236,7 +216,7 @@
           if (event.key === "Enter" && clientId !== "") {
             event.preventDefault();
             const message = messageInput.value;
-            const name = nameInput.value;
+            const name = nameInput.textContent;
 
             if (name && name.trim() !== "" && message.trim() !== "") {
               socket.send(
@@ -259,7 +239,7 @@
               type: "typing",
               isTyping: true,
               clientId: clientId,
-              name: nameInput.value,
+              name: nameInput.textContent,
             })
           );
 
@@ -292,6 +272,7 @@
               // }
             });
             updateOnlineUsers(parsedMessage.onlineUsers);
+            chatDiv.scrollTop = chatDiv.scrollHeight;
           } else if (parsedMessage.type === "message") {
             // Обработка обычных сообщений
             displayMessage(
@@ -332,7 +313,7 @@
         function updateOnlineUsers(onlineUsers) {
           const onlineUsersElement = document.getElementById("onlineUsers");
           const filteredOnlineUsers = onlineUsers.filter(
-            (user) => user !== nameInput.value
+            (user) => user !== nameInput.textContent
           ); // Фильтруем, исключая текущего пользователя
           onlineUsersElement.innerHTML = `Онлайн: ${filteredOnlineUsers.join(
             ", "
@@ -340,7 +321,7 @@
         }
         sendButton.addEventListener("click", () => {
           const message = messageInput.value;
-          const name = nameInput.value;
+          const name = nameInput.textContent;
 
           if (name && name.trim() !== "" && message.trim() !== "") {
             socket.send(
@@ -353,7 +334,26 @@
             alert("Введите имя");
           }
         });
+        let newMessageCount = 0;
 
+        chatDiv.addEventListener("scroll", () => {
+          const distanceFromBottom =
+            chatDiv.scrollHeight - (chatDiv.scrollTop + chatDiv.clientHeight);
+          if (distanceFromBottom <= 100) {
+            newMessageCount = 0;
+            updateNewMessagesIndicator();
+          }
+        });
+        function updateNewMessagesIndicator() {
+          const newMessagesElement = document.getElementById("newMessages");
+
+          if (newMessageCount > 0 && chatDiv.scrollTop > 100) {
+            newMessagesElement.textContent = `${newMessageCount}`;
+            newMessagesElement.style.display = "flex";
+          } else {
+            newMessagesElement.style.display = "none";
+          }
+        }
         function displayMessage(content, messageClientId, time, name) {
           const messageElement = document.createElement("div");
           const isOwnMessage = messageClientId === clientId;
@@ -382,6 +382,32 @@
           }
 
           chatDiv.appendChild(messageElement);
+          if (isOwnMessage) {
+            // Прокрутка к последнему сообщению с плавным эффектом
+            messageElement.scrollIntoView({ behavior: "smooth" });
+          } else {
+            const shouldScroll =
+              chatDiv.scrollTop + chatDiv.clientHeight === chatDiv.scrollHeight; // Проверяем, был ли скролл вниз
+
+            chatDiv.appendChild(messageElement);
+
+            // Восстанавливаем позицию скролла, если это необходимо
+            const distanceFromBottom =
+              chatDiv.scrollHeight - (chatDiv.scrollTop + chatDiv.clientHeight);
+
+            if (shouldScroll) {
+              chatDiv.scrollTop = chatDiv.scrollHeight;
+            } else {
+              scrollPosition = distanceFromBottom;
+              if (messageClientId !== clientId && distanceFromBottom > 100) {
+                // Проверяем, если сообщение от другого пользователя и расстояние до низа меньше или равно 100px
+                newMessageCount++;
+                updateNewMessagesIndicator();
+              } else {
+                messageElement.scrollIntoView({ behavior: "smooth" });
+              }
+            }
+          }
         }
       }
     </script>
